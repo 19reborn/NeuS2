@@ -63,8 +63,14 @@ The [DTU](https://roboimagedata.compute.dtu.dk/?page_id=36) Scan24 scene can be 
 Or, you can run the experiment in an automated fashion through python bindings:
 
 ```sh
-python scripts/run.py --mode nerf --scene ${data_path}/transform.json --name ${your_experiment_name} --network ${config_path}
+python scripts/run.py --mode nerf --scene ${data_path}/transform.json --name ${your_experiment_name} --network ${config_path} --n_steps 15000
 ```
+
+Also, you can use `scripts/run_dynamic.py` as:
+```sh
+python scripts/run_dynamic.py --mode nerf --scene ${data_path}/transform.json --name ${your_experiment_name} --network ${config_path}
+```
+, where the number of training iterations is specified in the config.
 
 The outputs and logs of the experiment can be found at `output/${your_experiment_name}/`.
 
