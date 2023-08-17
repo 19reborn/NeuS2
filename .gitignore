@@ -26,9 +26,7 @@ CMakeFiles
 
 *.pkl
 *.ply
-data/*.obj
-data/test_smpl.json
-data/dtu_ngp
+data
 *.sh
 *.log
 

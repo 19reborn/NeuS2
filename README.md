@@ -63,12 +63,14 @@ The [DTU](https://roboimagedata.compute.dtu.dk/?page_id=36) Scan24 scene can be 
 Or, you can run the experiment in an automated fashion through python bindings:
 
 ```sh
-python scripts/run.py --mode nerf --scene ${data_path}/transform.json --name ${your_experiment_name} --network ${config_path} --n_steps 15000
+python scripts/run.py --scene ${data_path}/transform.json --name ${your_experiment_name} --network ${config_name} --n_steps ${training_steps}
 ```
+
+For training on DTU dataset, `config_name` can be `dtu.json` and `training_steps` can be `15000`.
 
 Also, you can use `scripts/run_dynamic.py` as:
 ```sh
-python scripts/run_dynamic.py --mode nerf --scene ${data_path}/transform.json --name ${your_experiment_name} --network ${config_path}
+python scripts/run_dynamic.py --scene ${data_path}/transform.json --name ${your_experiment_name} --network ${config_name}
 ```
 , where the number of training iterations is specified in the config.
 
@@ -85,7 +87,7 @@ To specify a dynamic scene, you should set `--scene` to a directory containing `
 Or, run `scripts/run_dynamic.py` using python:
 
 ```sh
-python scripts/run_dynamic.py --mode nerf --scene ${data_dirname} --name ${your_experiment_name} --network ${config_path}
+python scripts/run_dynamic.py --scene ${data_dirname} --name ${your_experiment_name} --network ${config_name}
 ```
 
 There are some hyperparameters of the network configuration, such as `configs/nerf/base.json`, to control the dynamic training process:

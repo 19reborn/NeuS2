@@ -1993,7 +1993,7 @@ bool Testbed::training_network_next_frame() {
 	m_training_to_next_frame = false;
 	if (current_training_time_frame >= all_training_time_frame - 1){
 		// last frame
-		printf("alread last frame\n");
+		// printf("alread last frame\n");
 		return false;
 	}
 	// set current frame

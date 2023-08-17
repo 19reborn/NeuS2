@@ -1368,14 +1368,14 @@ __global__ void generate_training_samples_nerf_with_global_movement(
 	Eigen::Vector3f dir = ray_unnormalized.d.normalized();
 
 	ray_o -= first_frame_offset;
-
-	// apply global rotation and transition
-	#if rotation_reprensentation
-		global_movement_with_rotation_6d<network_precision_t>(rotation, transition, ray_o, dir);
-	#else
-		global_movement_with_rotation_quaternion<network_precision_t>(rotation, transition, ray_o, dir);
-	#endif
-
+	if (rotation != nullptr && transition != nullptr) {
+		// apply global rotation and transition
+		#if rotation_reprensentation
+			global_movement_with_rotation_6d<network_precision_t>(rotation, transition, ray_o, dir);
+		#else
+			global_movement_with_rotation_quaternion<network_precision_t>(rotation, transition, ray_o, dir);
+		#endif
+	}
 
 
 	Vector2f tminmax = aabb.ray_intersect(ray_o, dir); // ray depth min and ray depth max
@@ -1548,13 +1548,14 @@ __global__ void compute_loss_kernel_train_nerf_with_global_movement(
 	Eigen::Vector3f dir = rays_in_unnormalized[i].d.normalized();
 
 	ray_o -= first_frame_offset;
-
-	// apply global rotation and transition
-	#if rotation_reprensentation
-		global_movement_with_rotation_6d<network_precision_t>(rotation, transition, ray_o, dir);
-	#else
-		global_movement_with_rotation_quaternion<network_precision_t>(rotation, transition, ray_o, dir);
-	#endif
+	if (rotation != nullptr && transition != nullptr) {
+		// apply global rotation and transition
+		#if rotation_reprensentation
+			global_movement_with_rotation_6d<network_precision_t>(rotation, transition, ray_o, dir);
+		#else
+			global_movement_with_rotation_quaternion<network_precision_t>(rotation, transition, ray_o, dir);
+		#endif
+	}
 
 	Vector3f prev_deformed_pos = ray_o;
 	const Vector3f const_offset = Vector3f{1e-8f,1e-8f,1e-8f};
@@ -2275,14 +2276,16 @@ __global__ void init_rays_with_payload_kernel_nerf(
 	ray.d = ray.d.normalized();
 
 	ray.o -= first_frame_offset;
-	// global_movement_with_rotation<network_precision_t>(rotation, transition, ray.o, ray.d);
-	// apply global rotation and transition
-	#if rotation_reprensentation
-		global_movement_with_rotation_6d<network_precision_t>(rotation, transition, ray.o, ray.d);
-	#else
-		global_movement_with_rotation_quaternion<network_precision_t>(rotation, transition, ray.o, ray.d);
-	#endif
-	// ray.d = ray.d.normalized();
+	if (rotation != nullptr && transition != nullptr) {
+		// global_movement_with_rotation<network_precision_t>(rotation, transition, ray.o, ray.d);
+		// apply global rotation and transition
+		#if rotation_reprensentation
+			global_movement_with_rotation_6d<network_precision_t>(rotation, transition, ray.o, ray.d);
+		#else
+			global_movement_with_rotation_quaternion<network_precision_t>(rotation, transition, ray.o, ray.d);
+		#endif
+		// ray.d = ray.d.normalized();
+	}
 
 
 	if (envmap_data) {
@@ -2678,13 +2681,6 @@ void Testbed::render_nerf(CudaRenderBuffer& render_buffer, const Vector2i& max_r
 
 	CameraDistortion camera_distortion = render_opencv_camera_distortion ? m_nerf.render_distortion : CameraDistortion{};
 
-	Eigen::Vector<tcnn::network_precision_t, 3> zero_Th {0.f,0.f,0.f}; 
-	#if rotation_reprensentation
-		Eigen::Vector<tcnn::network_precision_t, 6> zero_Rot {1.f, 0.f, 0.f, 0.f, 1.f, 0.f};
-	#else
-		Eigen::Vector<tcnn::network_precision_t, 4> zero_Rot {0.f, 0.f, 0.f, 1.0f};
-	#endif
-
 	m_nerf.tracer.init_rays_from_camera(
 		render_buffer.spp(),
 		m_network->padded_output_width(),
@@ -2712,8 +2708,8 @@ void Testbed::render_nerf(CudaRenderBuffer& render_buffer, const Vector2i& max_r
 		m_nerf.cone_angle_constant,
 		render_mode,
 		stream,
-		m_predict_global_movement ? m_nerf_network->rotation()->params() : zero_Rot.data(),
-		m_predict_global_movement ? m_nerf_network->transition()->params() : zero_Th.data(),
+		m_predict_global_movement ? m_nerf_network->rotation()->params(): nullptr,
+		m_predict_global_movement ? m_nerf_network->transition()->params(): nullptr,
 		m_first_frame_offset
 	);
 	
@@ -3792,14 +3788,6 @@ void Testbed::train_nerf_step(uint32_t target_batch_size, uint32_t n_rays_per_ba
 
 	CUDA_CHECK_THROW(cudaMemsetAsync(ray_counter, 0, sizeof(uint32_t), stream));
 
-	
-	Eigen::Vector<tcnn::network_precision_t, 3> zero_Th {0.f,0.f,0.f}; 
-	#if rotation_reprensentation
-		Eigen::Vector<tcnn::network_precision_t, 6> zero_Rot {1.f, 0.f, 0.f, 0.f, 1.f, 0.f};
-	#else
-		Eigen::Vector<tcnn::network_precision_t, 4> zero_Rot {0.f, 0.f, 0.f, 1.0f};
-	#endif
-
 	linear_kernel(generate_training_samples_nerf_with_global_movement, 0, stream,
 		n_rays_per_batch,
 		m_aabb,
@@ -3831,8 +3819,8 @@ void Testbed::train_nerf_step(uint32_t target_batch_size, uint32_t n_rays_per_ba
 		m_nerf_network->n_extra_dims(),
 		current_training_time_frame,
 		m_training_step,
-		m_predict_global_movement ? m_nerf_network->rotation()->params(): zero_Rot.data(),
-		m_predict_global_movement ? m_nerf_network->transition()->params(): zero_Th.data(),
+		m_predict_global_movement ? m_nerf_network->rotation()->params(): nullptr,
+		m_predict_global_movement ? m_nerf_network->transition()->params(): nullptr,
 		m_first_frame_offset
 	);
 
@@ -3900,8 +3888,8 @@ void Testbed::train_nerf_step(uint32_t target_batch_size, uint32_t n_rays_per_ba
 		m_nerf.training.near_distance,
 		m_nerf_network->variance(),
 		m_training_step,
-		m_predict_global_movement ? m_nerf_network->rotation()->params(): zero_Rot.data(),
-		m_predict_global_movement ? m_nerf_network->transition()->params(): zero_Th.data(),
+		m_predict_global_movement ? m_nerf_network->rotation()->params(): nullptr,
+		m_predict_global_movement ? m_nerf_network->transition()->params(): nullptr,
 		m_first_frame_offset,
 		m_mask_loss_weight,
 		m_ek_loss_weight,
