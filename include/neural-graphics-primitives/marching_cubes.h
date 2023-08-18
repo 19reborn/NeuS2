@@ -47,7 +47,8 @@ void save_mesh(
 	const char* outputname,
 	bool unwrap_it,
 	float nerf_scale,
-	Eigen::Vector3f nerf_offset
+	Eigen::Vector3f nerf_offset,
+	bool invert_normals=false
 );
 
 #ifdef NGP_GUI

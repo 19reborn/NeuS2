@@ -302,7 +302,7 @@ void Testbed::compute_and_save_marching_cubes_mesh(const char* filename, Vector3
 	printf("unwrap_it:%d\n",unwrap_it);
 	marching_cubes(res3d, aabb, thresh);
 	if ((m_testbed_mode == ETestbedMode::Nerf)){
-		save_mesh(m_mesh.verts, m_mesh.vert_normals, m_mesh.vert_colors, m_mesh.indices, filename, unwrap_it, m_nerf.training.dataset.scale, m_nerf.training.dataset.offset);
+		save_mesh(m_mesh.verts, m_mesh.vert_normals, m_mesh.vert_colors, m_mesh.indices, filename, unwrap_it, m_nerf.training.dataset.scale, m_nerf.training.dataset.offset, m_nerf.training.dataset.from_na);
 	}
 }
 
@@ -920,7 +920,7 @@ void Testbed::imgui() {
 			if (uint32_t tricount = m_mesh.indices.size()/3) {
 				ImGui::InputText("##OBJFile", obj_filename_buf, sizeof(obj_filename_buf));
 				if (ImGui::Button("Save it!")) {
-					save_mesh(m_mesh.verts, m_mesh.vert_normals, m_mesh.vert_colors, m_mesh.indices, obj_filename_buf, m_mesh.unwrap, m_nerf.training.dataset.scale, m_nerf.training.dataset.offset);
+					save_mesh(m_mesh.verts, m_mesh.vert_normals, m_mesh.vert_colors, m_mesh.indices, obj_filename_buf, m_mesh.unwrap, m_nerf.training.dataset.scale, m_nerf.training.dataset.offset, m_nerf.training.dataset.from_na);
 				}
 				ImGui::SameLine();
 				ImGui::Text("Mesh has %d triangles\n", tricount);

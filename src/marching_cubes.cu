@@ -829,7 +829,8 @@ void save_mesh(
 	const char* outputname,
 	bool unwrap_it,
 	float nerf_scale,
-	Vector3f nerf_offset
+	Vector3f nerf_offset,
+	bool invert_normals
 ) {
 	std::vector<Vector3f> cpuverts; cpuverts.resize(verts.size());
 	std::vector<Vector3f> cpunormals; cpunormals.resize(normals.size());
@@ -908,7 +909,10 @@ void save_mesh(
 			fprintf(f,"%0.5f %0.5f %0.5f %0.3f %0.3f %0.3f %d %d %d\n", p.x(), p.y(), p.z(), n.x(), n.y(), n.z(), c8[0], c8[1], c8[2]);
 		}
 		for (size_t i=0;i<cpuindices.size();i+=3) {
-			fprintf(f,"3 %d %d %d\n", cpuindices[i+0], cpuindices[i+1], cpuindices[i+2]);
+			if (invert_normals)
+				fprintf(f,"3 %d %d %d\n", cpuindices[i+0], cpuindices[i+1], cpuindices[i+2]);
+			else
+				fprintf(f,"3 %d %d %d\n", cpuindices[i+2], cpuindices[i+1], cpuindices[i+0]);
 		}
 	} else {
 		// obj file
@@ -916,8 +920,7 @@ void save_mesh(
 			fprintf(f, "mtllib nerf.mtl\n");
 		}
 		for (size_t i = 0; i < cpuverts.size(); ++i) {
-			Vector3f p = {cpuverts[i].z(), cpuverts[i].x(), cpuverts[i].y()};
-			p = (p - nerf_offset) / nerf_scale;
+			Vector3f p = (cpuverts[i]-nerf_offset)/nerf_scale;
 			Vector3f c = cpucolors[i];
 			fprintf(f,"v %0.5f %0.5f %0.5f %0.3f %0.3f %0.3f\n", p.x(), p.y(), p.z(), tcnn::clamp(c.x(), 0.f, 1.f), tcnn::clamp(c.y(), 0.f, 1.f), tcnn::clamp(c.z(), 0.f, 1.f));
 		}
@@ -943,17 +946,29 @@ void save_mesh(
 			}
 			fprintf(f, "g default\nusemtl nerf\ns 1\n");
 			for (size_t i = 0; i < cpuindices.size(); i += 3) {
-				fprintf(f,"f %u/%u/%u %u/%u/%u %u/%u/%u\n",
-					cpuindices[i+0]+1,(uint32_t)i+1,  cpuindices[i+0]+1,
-					cpuindices[i+1]+1,(uint32_t)i+2,cpuindices[i+1]+1,
-					cpuindices[i+2]+1,(uint32_t)i+3,cpuindices[i+2]+1
-				);
+				if (invert_normals)
+					fprintf(f,"f %u/%u/%u %u/%u/%u %u/%u/%u\n",
+						cpuindices[i+0]+1,(uint32_t)i+1,  cpuindices[i+0]+1,
+						cpuindices[i+1]+1,(uint32_t)i+2,cpuindices[i+1]+1,
+						cpuindices[i+2]+1,(uint32_t)i+3,cpuindices[i+2]+1
+					);
+				else
+					fprintf(f,"f %u/%u/%u %u/%u/%u %u/%u/%u\n",
+						cpuindices[i+2]+1,(uint32_t)i+3,  cpuindices[i+2]+1,
+						cpuindices[i+1]+1,(uint32_t)i+2,cpuindices[i+1]+1,
+						cpuindices[i+0]+1,(uint32_t)i+1,cpuindices[i+0]+1
+					);
 			}
 		} else {
 			for (size_t i = 0; i < cpuindices.size(); i += 3) {
-				fprintf(f,"f %u//%u %u//%u %u//%u\n",
-					cpuindices[i+0]+1, cpuindices[i+0]+1, cpuindices[i+1]+1, cpuindices[i+1]+1, cpuindices[i+2]+1, cpuindices[i+2]+1
-				);
+				if (invert_normals)
+					fprintf(f,"f %u//%u %u//%u %u//%u\n",
+						cpuindices[i+0]+1, cpuindices[i+0]+1, cpuindices[i+1]+1, cpuindices[i+1]+1, cpuindices[i+2]+1, cpuindices[i+2]+1
+					);
+				else
+					fprintf(f,"f %u//%u %u//%u %u//%u\n",
+						cpuindices[i+2]+1, cpuindices[i+2]+1, cpuindices[i+1]+1, cpuindices[i+1]+1, cpuindices[i+0]+1, cpuindices[i+0]+1
+					);
 			}
 		}
 	}
