@@ -106,10 +106,12 @@ Dynamic scene examples can be downloaded from [Google Drive](https://drive.googl
 
 ## Data Convention
 
+**NeuS2 supports the data format provided by [Instant-NGP](https://github.com/NVlabs/instant-ngp).** Also, you can use NeuS2's data format (with `from_na=true`).
+
 Our NeuS2 implementation expects initial camera parameters to be provided in a `transforms.json` file, organized as follows:
 ```
 {
-	"from_na": true, # specify NeuS2 data format
+	"from_na": true, # if true, specify NeuS2's data format, which rotates the coordinate system by the x-axis for 180 degrees
 	"w": 512, # image_width
 	"h": 512, # image_height
 	"aabb_scale": 1.0,
