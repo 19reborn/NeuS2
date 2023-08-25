@@ -666,7 +666,7 @@ __global__ void splat_grid_samples_nerf_max_nearest_neighbor(const uint32_t n_el
 
 	// Current setting: optical thickness of the smallest possible stepsize.
 	// Uncomment for:   optical thickness of the ~expected step size when the observer is in the middle of the scene
-	uint32_t level = 0;//local_idx / (NERF_GRIDSIZE() * NERF_GRIDSIZE() * NERF_GRIDSIZE());
+	// uint32_t level = 0;//local_idx / (NERF_GRIDSIZE() * NERF_GRIDSIZE() * NERF_GRIDSIZE());
 
 	// float mlp = network_to_density(float(network_output[i]), density_activation);
 	float mlp = float(network_output[i]);

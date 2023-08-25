@@ -2298,7 +2298,7 @@ void Testbed::reset_network() {
 	size_t n_network_params = m_network->n_params() - n_encoding_params;
 
 	tlog::info() << "  total_encoding_params=" << n_encoding_params << " total_network_params=" << n_network_params;
-	printf("init m_network->n_params():%d\n",m_network->n_params());
+	printf("init m_network->n_params():%lu\n", m_network->n_params());
 	// create trainier
 	m_trainer = std::make_shared<Trainer<float, precision_t, precision_t>>(m_network, m_optimizer, m_loss, m_seed);
 	m_training_step = 0;
@@ -2530,7 +2530,7 @@ void Testbed::reset_network_incremental() {
 
 	tlog::info() << "  total_encoding_params=" << n_encoding_params << " total_network_params=" << n_network_params;
 
-	printf("m_network->n_params():%d\n",m_network->n_params());
+	printf("m_network->n_params():%lu\n",m_network->n_params());
 	// create trainier
 	m_trainer = std::make_shared<Trainer<float, precision_t, precision_t>>(m_network, m_optimizer, m_loss, m_seed);
 	m_training_step = 0;

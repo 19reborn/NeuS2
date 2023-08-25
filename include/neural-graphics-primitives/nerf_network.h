@@ -788,12 +788,15 @@ public:
 		}
 
 		printf("network_params_elements: %d\n", n_elements);
-		if (!fp)
-			printf("no file");
+		if (!fp) {
+			printf("[ERROR] Load SDF MLP weight failed!\n");
+			printf("[ERROR] Please run in the base directory of NeuS2 so that the `utils/mlp_weights.txt` can be found!\n");
+			exit(1);
+		}
 		else {
 			uint32_t i;
 			for (i = 0; i < n_elements; i++) {
-				fscanf(fp, "%f", &data[i]);
+				int readlen = fscanf(fp, "%f", &data[i]);
 			}
 			fclose(fp);
 		}
@@ -870,7 +873,7 @@ public:
 		tcnn::generate_random_uniform<float>(m_rng, variance_n_params, params_full_precision + offset, 0.300f, 0.300f);
 
 		offset += m_variance_network->n_params();
-		printf("m_variance_network_n_params: %d\n",m_variance_network->n_params()); // 1
+		printf("m_variance_network_n_params: %lu\n",m_variance_network->n_params()); // 1
 	}
 
 	void initialize_sdf_mlp_params(tcnn::pcg32& rnd, float* params_full_precision, T* params, T* inference_params, T* backward_params, T* gradients, float scale = 1) {
@@ -1042,7 +1045,7 @@ public:
 		uint32_t offset = 0;
 		float scale = 1.0f;
 		tcnn::pcg32 rnd{1337};
-		printf("accumulated transition params num: %d\n",accumulated_transition->n_params());
+		printf("accumulated transition params num: %lu\n",accumulated_transition->n_params());
 		
 		accumulated_transition->initialize_params(
 			rnd,
@@ -1104,7 +1107,7 @@ public:
 		return m_variance;
 	}
 
-	const float cos_anneal_ratio() const{
+	float cos_anneal_ratio() const{
         if (m_anneal_end == 0) {
             return 1.0;
 		}
@@ -1199,7 +1202,7 @@ public:
 
 		size_t n_params = params_hp.size();
 		
-		printf("rotation n_params: %d\n", n_params);
+		printf("rotation n_params: %lu\n", n_params);
 
 		parallel_for_gpu(n_params, [params=accumulated_rotation->params(), params_hp=params_hp.data()] __device__ (size_t i) {
 			params[i] = (T)params_hp[i];
@@ -1209,7 +1212,7 @@ public:
 
 		n_params = params_hp.size();
 
-		printf("transition n_params: %d\n", n_params);
+		printf("transition n_params: %lu\n", n_params);
 
 		parallel_for_gpu(n_params, [params=accumulated_transition->params(), params_hp=params_hp.data()] __device__ (size_t i) {
 			params[i] = (T)params_hp[i];
@@ -1241,7 +1244,7 @@ public:
 
 		size_t n_params = params_hp.size();
 		
-		printf("rotation n_params: %d\n", n_params);
+		printf("rotation n_params: %lu\n", n_params);
 
 		parallel_for_gpu(n_params, [params=m_delta_network->rotation()->params(), params_hp=params_hp.data()] __device__ (size_t i) {
 			params[i] = (T)params_hp[i];
@@ -1251,7 +1254,7 @@ public:
 
 		n_params = params_hp.size();
 
-		printf("transition n_params: %d\n", n_params);
+		printf("transition n_params: %lu\n", n_params);
 
 		parallel_for_gpu(n_params, [params=m_delta_network->transition()->params(), params_hp=params_hp.data()] __device__ (size_t i) {
 			params[i] = (T)params_hp[i];
