@@ -26,7 +26,6 @@ NGP_NAMESPACE_BEGIN
 
 #define NERF_DEBUG_BACKWARD 0
 #define GEOMETRY_INIT 1
-#define SDF_GRID 0
 #define global_delta 1
 #define viewdir_backward 0
 
@@ -72,7 +71,7 @@ public:
 
 		m_variance = 0.3f;
 		m_training_step = 0;
-		m_sdf_bias =(T)-0.1f; 
+		m_sdf_bias =(T)(local_density_network_config.value("sdf_bias", -0.1f)); 
 
 		accumulated_transition = std::make_shared<TrainableBuffer<1, 1, T>>(Eigen::Matrix<int, 1, 1>{(int)4});
 		#if rotation_reprensentation

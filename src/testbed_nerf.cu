@@ -1897,6 +1897,14 @@ __global__ void compute_loss_kernel_train_nerf_with_global_movement(
 		if (ek_loss_output) {
 			ek_loss_output[i] += (gradient_norm - 1.0f) * (gradient_norm - 1.0f);
 		}
+		
+		
+		// for large scene, we only cal ek_loss for points in the aabb_scale 1.0 box
+		BoundingBox ek_aabb = BoundingBox{Vector3f::Constant(0.5f), Vector3f::Constant(0.5f)};
+		ek_aabb.inflate(0.5f);
+
+		bool inside_ek_aabb = ek_aabb.contains(pos);
+	
 
 		// ek_loss
 		local_dL_doutput[4] = (tcnn::network_precision_t)(ek_loss_weight * 2 * original_loss_scale * pos_gradient_norm_inv * pos_gradient[0]);
