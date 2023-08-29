@@ -7,9 +7,6 @@
 		"decay": 0.95,
 		"nested": {
 			"otype": "ExponentialDecay",
-			"decay_start": 20000,
-			"decay_interval": 10000,
-			"decay_base": 0.33,
 			"nested": {
 				"otype": "Adam",
 				"learning_rate": 5e-3,
@@ -68,14 +65,15 @@
 	},
 	"hyperparams": {
 		"linear_color": false,
-		"first_frame_max_training_step": 15000,
+		"first_frame_max_training_step": 20000,
 		"mask_loss_weight": 0.0,
-		"ek_loss_weight": 0.01,
-		"anneal_end": 1000,
+		"ek_loss_weight": 0.05,
+		"anneal_end": 5000,
 		"use_bgnerf": true,
 		"render_bgnerf": false,
-		"render_neus": true
-		// "batch_size_bg": 32768
+		"render_neus": true,
+		"batch_size": 262144,
+		"batch_size_bg": 131072
 	} ,
 	"globalmove": {
 		"optimizer": {
@@ -108,12 +106,6 @@
 			"decay": 0.95,
 			"nested": {
 				"otype": "ExponentialDecay",
-				// "decay_start": 20000,
-				// "decay_interval": 10000,
-				// "decay_base": 0.33,
-				// "decay_start": 200,
-				// "decay_interval": 50,
-				// "decay_base": 0.95,
 				"nested": {
 					"otype": "Adam",
 					"learning_rate": 1e-2,
@@ -125,13 +117,24 @@
 			}
 		},
 		"encoding": {
-			"otype": "HashGrid",
-			"n_levels": 16,
-			"n_features_per_level": 2,
-			"log2_hashmap_size": 19,
-			"base_resolution": 16,
-			"top_resolution": 2048
+			"otype": "Frequency",
+			"n_frequencies": 6
 		},
+		// "encoding": {
+		// 	// "otype": "Frequency",
+		// 	"otype": "HannWindowFrequency",
+		// 	"hann_start_iters": -50,
+		// 	"hann_end_iters": 500,
+		// 	"n_frequencies": 6
+		// },
+		// "encoding": {
+		// 	"otype": "HashGrid",
+		// 	"n_levels": 16,
+		// 	"n_features_per_level": 2,
+		// 	"log2_hashmap_size": 19,
+		// 	"base_resolution": 16,
+		// 	"top_resolution": 2048
+		// },
 		"network": {
 			"otype": "FullyFusedMLP",
 			"activation": "ReLU",

@@ -46,6 +46,7 @@ NGP_NAMESPACE_BEGIN
 
 inline constexpr __device__ float NERF_RENDERING_NEAR_DISTANCE() { return 0.2f; }
 inline constexpr __device__ uint32_t NERF_STEPS() { return 1024; } // finest number of steps per unit length
+inline constexpr __device__ uint32_t NERF_STEPS_BG() { return 1024; } // finest number of steps per unit length
 inline constexpr __device__ uint32_t NERF_CASCADES() { return 8; }
 
 inline constexpr __device__ float SQRT3() { return 1.73205080757f; }
@@ -65,7 +66,8 @@ inline constexpr __device__ float NERF_MIN_OPTICAL_THICKNESS() { return 30.0f; }
 inline constexpr __device__ float NERF_MIN_OPTICAL_THICKNESS() { return 0.1f; }
 #endif
 
-inline constexpr __device__ float NERF_MIN_OPTICAL_THICKNESS_BG() { return 0.1f; } 
+// inline constexpr __device__ float NERF_MIN_OPTICAL_THICKNESS_BG() { return 0.1f; }  // todo:: use 0.01
+inline constexpr __device__ float NERF_MIN_OPTICAL_THICKNESS_BG() { return 0.1f; }  // todo:: use 0.01
 
 static constexpr uint32_t MARCH_ITER = 10000;
 
@@ -704,6 +706,60 @@ __global__ void splat_grid_samples_nerf_max_nearest_neighbor(const uint32_t n_el
 	atomicMax((uint32_t*)&grid_out[local_idx], __float_as_uint(optical_thickness));
 }
 
+__global__ void splat_grid_samples_nerf_max_nearest_neighbor_bg(const uint32_t n_elements, const uint32_t* __restrict__ indices, const tcnn::network_precision_t* network_output, float* __restrict__ grid_out, ENerfActivation rgb_activation, ENerfActivation density_activation) {
+	const uint32_t i = threadIdx.x + blockIdx.x * blockDim.x;
+	if (i >= n_elements) return;
+
+	uint32_t local_idx = indices[i];
+
+	// Current setting: optical thickness of the smallest possible stepsize.
+	// Uncomment for:   optical thickness of the ~expected step size when the observer is in the middle of the scene
+	uint32_t level = 0;//local_idx / (NERF_GRIDSIZE() * NERF_GRIDSIZE() * NERF_GRIDSIZE());
+
+	float mlp = network_to_density(float(network_output[i]), density_activation);
+	float optical_thickness = mlp * scalbnf(MIN_CONE_STEPSIZE(), level);
+
+	// Positive floats are monotonically ordered when their bit pattern is interpretes as uint.
+	// uint atomicMax is thus perfectly acceptable.
+	atomicMax((uint32_t*)&grid_out[local_idx], __float_as_uint(optical_thickness));
+}
+
+
+__global__ void set_density_grid_vacuum(const uint32_t n_elements, BoundingBox aabb, BoundingBox aabb_bg, float* __restrict__ grid, const NerfPosition* __restrict__ out, const uint32_t* __restrict__ indices, uint32_t n_cascades) {
+	const uint32_t i = threadIdx.x + blockIdx.x * blockDim.x;
+	if (i >= n_elements) return;
+
+	uint32_t idx = indices[i];
+
+	if (true) {
+		auto pos = out[i].p;
+		auto absolute_pos = unwarp_position(pos, aabb_bg);
+		if (aabb.contains(absolute_pos)) {
+			grid[idx] = 0.0f;
+			return;
+		}
+	}
+	else {
+		const uint32_t n_grid_vacuum = std::ceil(NERF_GRIDSIZE() / aabb_bg.diag().x());
+		const uint32_t vacuum_in = (NERF_GRIDSIZE() - n_grid_vacuum) / 2;
+		const uint32_t vacuum_out = n_grid_vacuum + vacuum_in;
+		
+		// Random position within that cellq
+		uint32_t pos_idx = idx % (NERF_GRIDSIZE()*NERF_GRIDSIZE()*NERF_GRIDSIZE());
+		
+		uint32_t x = tcnn::morton3D_invert(pos_idx>>0);
+		uint32_t y = tcnn::morton3D_invert(pos_idx>>1);
+		uint32_t z = tcnn::morton3D_invert(pos_idx>>2);
+	
+		bool pos_in_vacuum = (x >= vacuum_in && x < vacuum_out) && (y >= vacuum_in && y < vacuum_out) && (z >= vacuum_in && z < vacuum_out);
+		
+		if (pos_in_vacuum) {
+			grid[idx] = 0.0f;
+		}
+	}
+
+}
+
 __global__ void grid_samples_half_to_float(const uint32_t n_elements, BoundingBox aabb, float* dst, const tcnn::network_precision_t* network_output, ENerfActivation density_activation, const NerfPosition* __restrict__ coords_in, const float* __restrict__ grid_in, uint32_t max_cascade) {
 	const uint32_t i = threadIdx.x + blockIdx.x * blockDim.x;
 	if (i >= n_elements) return;
@@ -795,6 +851,32 @@ __global__ void grid_to_bitfield(
 	uint8_t bits = 0;
 
 	float thresh = std::min(NERF_MIN_OPTICAL_THICKNESS(), *mean_density_ptr);
+
+	#pragma unroll
+	for (uint8_t j = 0; j < 8; ++j) {
+		bits |= grid[i*8+j] > thresh ? ((uint8_t)1 << j) : 0;
+	}
+
+	grid_bitfield[i] = bits;
+}
+
+__global__ void grid_to_bitfield_bg(
+	const uint32_t n_elements,
+	const uint32_t n_nonzero_elements,
+	const float* __restrict__ grid,
+	uint8_t* __restrict__ grid_bitfield,
+	const float* __restrict__ mean_density_ptr
+) {
+	const uint32_t i = threadIdx.x + blockIdx.x * blockDim.x;
+	if (i >= n_elements) return;
+	if (i >= n_nonzero_elements) {
+		grid_bitfield[i] = 0;
+		return;
+	}
+
+	uint8_t bits = 0;
+
+	float thresh = std::min(NERF_MIN_OPTICAL_THICKNESS_BG(), *mean_density_ptr);
 
 	#pragma unroll
 	for (uint8_t j = 0; j < 8; ++j) {
@@ -1299,7 +1381,6 @@ __global__ void generate_training_samples_nerf_with_global_movement(
 	BoundingBox aabb_bg,
 	const uint32_t max_samples,
 	const uint32_t max_samples_bg,
-	const uint32_t nerf_steps_bg,
 	const uint32_t n_rays_total,
 	default_rng_t rng,
 	uint32_t* __restrict__ ray_counter,
@@ -1315,6 +1396,7 @@ __global__ void generate_training_samples_nerf_with_global_movement(
 	const TrainingImageMetadata* __restrict__ metadata,
 	const TrainingXForm* training_xforms,
 	const uint8_t* __restrict__ density_grid,
+	const uint8_t* __restrict__ density_grid_bg,
 	bool max_level_rand_training,
 	float* __restrict__ max_level_ptr,
 	bool snap_to_pixel_centers,
@@ -1500,16 +1582,14 @@ __global__ void generate_training_samples_nerf_with_global_movement(
 
 		// pre sampling for background nerf 
 		j = 0; // reset j
-		while (aabb_bg.contains(pos = ray_o + t * dir) && j < nerf_steps_bg) {
+		while (aabb_bg.contains(pos = ray_o + t * dir) && j < NERF_STEPS_BG()) {
 			float dt = calc_dt(t, cone_angle_bg);
 			uint32_t mip = mip_from_dt(dt, pos);
 
-			if (!aabb.contains(pos = ray_o + t * dir)) {
+			if (density_grid_occupied_at(pos, density_grid_bg, mip) && ! aabb.contains(pos = ray_o + t * dir)) {
 				++j;
 				t += dt;
 			} else {
-				// faster raymarching
-				// todo::check this:
 				uint32_t res = NERF_GRIDSIZE()>>mip;
 				t = advance_to_next_voxel(t, cone_angle_bg, pos, dir, idir, res); // neuspp to do:: check something bugs here
 			}
@@ -1573,13 +1653,11 @@ __global__ void generate_training_samples_nerf_with_global_movement(
 	while (aabb_bg.contains(pos = ray_o + t * dir) && j < numsteps_bg) {
 		float dt = calc_dt(t, cone_angle_bg);
 		uint32_t mip = mip_from_dt(dt, pos);
-		if (!aabb.contains(pos = ray_o + t * dir)) {
+		if (density_grid_occupied_at(pos, density_grid_bg, mip) && ! aabb.contains(pos = ray_o + t * dir)) {
 			coords_out_bg(j)->set_with_optional_extra_dims(warp_position(pos, aabb_bg), warped_dir, warp_dt(dt), extra_dims, coords_out_bg.stride_in_bytes);
 			++j;
 			t += dt;
 		} else {
-			// faster raymarching
-			// todo::check this:
 			uint32_t res = NERF_GRIDSIZE()>>mip;
 			t = advance_to_next_voxel(t, cone_angle_bg, pos, dir, idir, res); // neuspp to do:: check something bugs here
 		}
@@ -3748,6 +3826,90 @@ void Testbed::update_density_grid_nerf(float decay, uint32_t n_uniform_density_g
 	update_density_grid_mean_and_bitfield(stream);
 }
 
+void Testbed::update_density_grid_bgnerf(float decay, uint32_t n_uniform_density_grid_samples, uint32_t n_nonuniform_density_grid_samples, cudaStream_t stream) {
+	const uint32_t n_elements = NERF_GRIDSIZE() * NERF_GRIDSIZE() * NERF_GRIDSIZE() * (m_bgnerf.max_cascade + 1);
+
+	m_bgnerf.density_grid.resize(n_elements);
+
+	const uint32_t n_density_grid_samples = n_uniform_density_grid_samples + n_nonuniform_density_grid_samples;
+
+	const uint32_t padded_output_width = m_ngp_network->padded_density_output_width();
+
+	GPUMemoryArena::Allocation alloc;
+	auto scratch = allocate_workspace_and_distribute<
+		NerfPosition,       // positions at which the NN will be queried for density evaluation
+		uint32_t,           // indices of corresponding density grid cells
+		float,              // the resulting densities `density_grid_tmp` to be merged with the running estimate of the grid
+		network_precision_t // output of the MLP before being converted to densities.
+	>(stream, &alloc, n_density_grid_samples, n_elements, n_elements, n_density_grid_samples * padded_output_width);
+
+	NerfPosition* density_grid_positions = std::get<0>(scratch);
+	uint32_t* density_grid_indices = std::get<1>(scratch);
+	float* density_grid_tmp = std::get<2>(scratch);
+	network_precision_t* mlp_out = std::get<3>(scratch);
+
+	if (m_training_step == 0 || m_nerf.training.n_images_for_training != m_nerf.training.n_images_for_training_prev) {
+		m_nerf.training.n_images_for_training_prev = m_nerf.training.n_images_for_training;
+		if (m_training_step == 0) {
+			m_bgnerf.density_grid_ema_step = 0;
+		}
+		// Only cull away empty regions where no camera is looking when the cameras are actually meaningful.
+		// if (!m_bgnerf.training.dataset.has_rays) {
+		if (false) { // with bugs
+			linear_kernel(mark_untrained_density_grid, 0, stream, n_elements, m_bgnerf.density_grid.data(),
+				m_nerf.training.n_images_for_training, // use m_nerf.training
+				m_nerf.training.metadata_gpu.data(),
+				m_nerf.training.transforms_gpu.data(),
+				m_training_step == 0
+			);
+		} else {
+			CUDA_CHECK_THROW(cudaMemsetAsync(m_bgnerf.density_grid.data(), 0, sizeof(float)*n_elements, stream));
+		}
+	}
+
+	uint32_t n_steps = 1;
+	for (uint32_t i = 0; i < n_steps; ++i) {
+		CUDA_CHECK_THROW(cudaMemsetAsync(density_grid_tmp, 0, sizeof(float)*n_elements, stream));
+
+		linear_kernel(generate_grid_samples_nerf_nonuniform, 0, stream,
+			n_uniform_density_grid_samples,
+			m_bgnerf.training.density_grid_rng,
+			m_bgnerf.density_grid_ema_step,
+			m_aabb_bg,
+			m_bgnerf.density_grid.data(),
+			density_grid_positions,
+			density_grid_indices,
+			m_bgnerf.max_cascade+1,
+			-0.01f
+		);
+		m_bgnerf.training.density_grid_rng.advance();
+
+		linear_kernel(generate_grid_samples_nerf_nonuniform, 0, stream,
+			n_nonuniform_density_grid_samples,
+			m_bgnerf.training.density_grid_rng,
+			m_bgnerf.density_grid_ema_step,
+			m_aabb_bg,
+			m_bgnerf.density_grid.data(),
+			density_grid_positions+n_uniform_density_grid_samples,
+			density_grid_indices+n_uniform_density_grid_samples,
+			m_bgnerf.max_cascade+1,
+			NERF_MIN_OPTICAL_THICKNESS_BG()
+		);
+		m_bgnerf.training.density_grid_rng.advance();
+
+		GPUMatrix<network_precision_t, RM> density_matrix(mlp_out, padded_output_width, n_density_grid_samples);
+		GPUMatrix<float> density_grid_position_matrix((float*)density_grid_positions, sizeof(NerfPosition)/sizeof(float), n_density_grid_samples);
+		m_ngp_network->density(stream, density_grid_position_matrix, density_matrix, false);
+
+		linear_kernel(splat_grid_samples_nerf_max_nearest_neighbor_bg, 0, stream, n_density_grid_samples, density_grid_indices, mlp_out, density_grid_tmp, m_nerf.rgb_activation, m_nerf.density_activation);
+		linear_kernel(ema_grid_samples_nerf, 0, stream, n_elements, decay, m_bgnerf.density_grid_ema_step, m_bgnerf.density_grid.data(), density_grid_tmp);
+
+		++m_bgnerf.density_grid_ema_step;
+	}
+	linear_kernel(set_density_grid_vacuum, 0, stream, n_density_grid_samples, m_aabb, m_aabb_bg, m_bgnerf.density_grid.data(), density_grid_positions, density_grid_indices, m_bgnerf.max_cascade+1);
+	update_density_grid_mean_and_bitfield_bgnerf(stream);
+}
+
 void Testbed::update_density_grid_mean_and_bitfield(cudaStream_t stream) {
 	const uint32_t n_elements = NERF_GRIDSIZE() * NERF_GRIDSIZE() * NERF_GRIDSIZE();
 
@@ -3768,6 +3930,27 @@ void Testbed::update_density_grid_mean_and_bitfield(cudaStream_t stream) {
 		linear_kernel(bitfield_max_pool, 0, stream, n_elements/64, m_nerf.get_density_grid_bitfield_mip(level-1), m_nerf.get_density_grid_bitfield_mip(level));
 	}
 
+}
+
+void Testbed::update_density_grid_mean_and_bitfield_bgnerf(cudaStream_t stream) {
+	const uint32_t n_elements = NERF_GRIDSIZE() * NERF_GRIDSIZE() * NERF_GRIDSIZE();
+
+	const uint32_t n_grid_vacuum = std::ceil(NERF_GRIDSIZE() / m_aabb_bg.diag().x()); // assume that the bbox is a cube
+	const uint32_t n_elements_new = n_elements - (n_grid_vacuum * n_grid_vacuum * n_grid_vacuum);
+
+	size_t size_including_mips = grid_mip_offset(NERF_CASCADES())/8;
+	m_bgnerf.density_grid_bitfield.enlarge(size_including_mips);
+	m_bgnerf.density_grid_mean.enlarge(reduce_sum_workspace_size(n_elements));
+
+	CUDA_CHECK_THROW(cudaMemsetAsync(m_bgnerf.density_grid_mean.data(), 0, sizeof(float), stream));
+
+	reduce_sum(m_bgnerf.density_grid.data(), [n_elements_new] __device__ (float val) { return fmaxf(val, 0.f) / (n_elements_new); }, m_bgnerf.density_grid_mean.data(), n_elements, stream);
+
+	linear_kernel(grid_to_bitfield_bg, 0, stream, n_elements/8 * NERF_CASCADES(), n_elements/8 * (m_bgnerf.max_cascade + 1), m_bgnerf.density_grid.data(), m_bgnerf.density_grid_bitfield.data(), m_bgnerf.density_grid_mean.data());
+
+	for (uint32_t level = 1; level < NERF_CASCADES(); ++level) {
+		linear_kernel(bitfield_max_pool, 0, stream, n_elements/64, m_bgnerf.get_density_grid_bitfield_mip(level-1), m_bgnerf.get_density_grid_bitfield_mip(level));
+	}
 }
 
 void Testbed::Nerf::Training::Counters::prepare_for_training_steps(cudaStream_t stream) {
@@ -4240,7 +4423,6 @@ void Testbed::train_nerf_step(uint32_t target_batch_size, uint32_t target_batch_
 
 	CUDA_CHECK_THROW(cudaMemsetAsync(ray_counter, 0, sizeof(uint32_t), stream));
 
-	uint32_t samples_per_ray_bg = target_batch_size_bg / n_rays_per_batch; // todo:: progressively update
 	printf("DEBUG:begin generate training sample!\n");
 	linear_kernel(generate_training_samples_nerf_with_global_movement, 0, stream,
 		n_rays_per_batch,
@@ -4248,7 +4430,6 @@ void Testbed::train_nerf_step(uint32_t target_batch_size, uint32_t target_batch_
 		m_aabb_bg,
 		max_inference,
 		max_inference_bg,
-		samples_per_ray_bg,
 		n_rays_total,
 		m_rng,
 		ray_counter,
@@ -4264,6 +4445,7 @@ void Testbed::train_nerf_step(uint32_t target_batch_size, uint32_t target_batch_
 		m_nerf.training.metadata_gpu.data(),
 		m_nerf.training.transforms_gpu.data(),
 		m_nerf.density_grid_bitfield.data(),
+		m_use_bgnerf ? m_bgnerf.density_grid_bitfield.data() : nullptr,
 		m_max_level_rand_training,
 		max_level,
 		m_nerf.training.snap_to_pixel_centers,
@@ -4486,11 +4668,18 @@ void Testbed::training_prep_nerf(uint32_t batch_size, cudaStream_t stream) {
 
 	float alpha = m_nerf.training.density_grid_decay;
 	uint32_t n_cascades = m_nerf.max_cascade+1;
+	uint32_t n_cascades_bg = m_bgnerf.max_cascade+1;
 
 	if (m_canonical_training_step < 256) {
 		update_density_grid_nerf(alpha, NERF_GRIDSIZE()*NERF_GRIDSIZE()*NERF_GRIDSIZE()*n_cascades, 0, stream);
+		if (m_use_bgnerf) {
+			update_density_grid_bgnerf(alpha, NERF_GRIDSIZE()*NERF_GRIDSIZE()*NERF_GRIDSIZE()*n_cascades_bg, 0, stream);
+		}
 	} else {
 		update_density_grid_nerf(alpha, NERF_GRIDSIZE()*NERF_GRIDSIZE()*NERF_GRIDSIZE()/4*n_cascades, NERF_GRIDSIZE()*NERF_GRIDSIZE()*NERF_GRIDSIZE()/4*n_cascades, stream);
+		if (m_use_bgnerf) {
+			update_density_grid_bgnerf(alpha, NERF_GRIDSIZE()*NERF_GRIDSIZE()*NERF_GRIDSIZE()/4*n_cascades_bg, NERF_GRIDSIZE()*NERF_GRIDSIZE()*NERF_GRIDSIZE()/4*n_cascades_bg, stream);
+		}
 	}
 }
 

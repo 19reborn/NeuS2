@@ -321,8 +321,10 @@ public:
 	bool keyboard_event();
 	void generate_training_samples_sdf(Eigen::Vector3f* positions, float* distances, uint32_t n_to_generate, cudaStream_t stream, bool uniform_only);
 	void update_density_grid_nerf(float decay, uint32_t n_uniform_density_grid_samples, uint32_t n_nonuniform_density_grid_samples, cudaStream_t stream);
+	void update_density_grid_bgnerf(float decay, uint32_t n_uniform_density_grid_samples, uint32_t n_nonuniform_density_grid_samples, cudaStream_t stream);
 	void reset_density_grid_nerf(cudaStream_t stream);
 	void update_density_grid_mean_and_bitfield(cudaStream_t stream);
+	void update_density_grid_mean_and_bitfield_bgnerf(cudaStream_t stream);
 	void train_nerf(uint32_t target_batch_size, uint32_t target_batch_size_bg, bool get_loss_scalar, cudaStream_t stream);
 	void train_nerf_step(uint32_t target_batch_size, uint32_t target_batch_size_bg, uint32_t n_rays_per_batch, uint32_t* counter, uint32_t* counter_bg, uint32_t* compacted_counter, uint32_t* compacted_counter_bg, float* loss, float* ek_loss, float* mask_loss, cudaStream_t stream);
 	void train_sdf(size_t target_batch_size, bool get_loss_scalar, cudaStream_t stream);
