@@ -461,6 +461,10 @@ NerfDataset load_nerf(const std::vector<filesystem::path>& jsonpaths, float shar
 			result.aabb_scale = json["aabb_scale"];
 		}
 
+		if (json.contains("aabb_scale_bg")) {
+			result.aabb_scale_bg = json["aabb_scale_bg"];
+		}
+		
 		if (json.contains("offset")) {
 			result.offset =
 				json["offset"].is_array() ?

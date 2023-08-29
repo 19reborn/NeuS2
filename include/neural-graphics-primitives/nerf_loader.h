@@ -83,6 +83,7 @@ struct NerfDataset {
 	Eigen::Vector2i envmap_resolution = {0, 0};
 	float scale = 1.0f;
 	int aabb_scale = 1;
+	int aabb_scale_bg = 2;
 	bool from_mitsuba = false;
 	bool from_na = false;
 	bool is_hdr = false;

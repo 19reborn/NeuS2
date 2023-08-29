@@ -12,7 +12,7 @@
 			"decay_base": 0.33,
 			"nested": {
 				"otype": "Adam",
-				"learning_rate": 1e-2,
+				"learning_rate": 5e-3,
 				"beta1": 0.9,
 				"beta2": 0.99,
 				"epsilon": 1e-15,
@@ -42,7 +42,7 @@
 		"output_activation": "None",
 		"n_neurons": 64,
 		"n_hidden_layers": 1,
-		"sdf_bias": 0.1
+		"sdf_bias": -0.1
 	},
 	"dir_encoding": {
 		"otype": "Composite",
@@ -70,7 +70,12 @@
 		"linear_color": false,
 		"first_frame_max_training_step": 15000,
 		"mask_loss_weight": 0.0,
-		"ek_loss_weight": 0.01
+		"ek_loss_weight": 0.01,
+		"anneal_end": 1000,
+		"use_bgnerf": true,
+		"render_bgnerf": false,
+		"render_neus": true
+		// "batch_size_bg": 32768
 	} ,
 	"globalmove": {
 		"optimizer": {
@@ -95,6 +100,66 @@
 					"l2_reg": 1e-10
 				}
 			}
+		}
+	} ,
+	"bg_network": {
+		"optimizer": {
+			"otype": "Ema",
+			"decay": 0.95,
+			"nested": {
+				"otype": "ExponentialDecay",
+				// "decay_start": 20000,
+				// "decay_interval": 10000,
+				// "decay_base": 0.33,
+				// "decay_start": 200,
+				// "decay_interval": 50,
+				// "decay_base": 0.95,
+				"nested": {
+					"otype": "Adam",
+					"learning_rate": 1e-2,
+					"beta1": 0.9,
+					"beta2": 0.99,
+					"epsilon": 1e-15,
+					"l2_reg": 1e-6
+				}
+			}
+		},
+		"encoding": {
+			"otype": "HashGrid",
+			"n_levels": 16,
+			"n_features_per_level": 2,
+			"log2_hashmap_size": 19,
+			"base_resolution": 16,
+			"top_resolution": 2048
+		},
+		"network": {
+			"otype": "FullyFusedMLP",
+			"activation": "ReLU",
+			"output_activation": "None",
+			"n_neurons": 64,
+			"n_hidden_layers": 1
+		},
+		"dir_encoding": {
+			"otype": "Composite",
+			"nested": [
+				{
+					"n_dims_to_encode": 3,
+					"otype": "SphericalHarmonics",
+					"degree": 4
+				},
+				{
+					"otype": "Identity",
+					"n_bins": 4,
+					"degree": 4
+				}
+			]
+		},
+		"rgb_network": {
+			"otype": "FullyFusedMLP",
+			"activation": "ReLU",
+			"output_activation": "None",
+			"n_neurons": 64,
+			"n_hidden_layers": 2
 		}
 	}
 }

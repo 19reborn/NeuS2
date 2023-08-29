@@ -8,6 +8,7 @@
 #include <neural-graphics-primitives/marching_cubes.h>
 #include <neural-graphics-primitives/nerf_loader.h>
 #include <neural-graphics-primitives/nerf_network.h>
+#include <neural-graphics-primitives/ngp_network.h>
 #include <neural-graphics-primitives/render_buffer.h>
 #include <neural-graphics-primitives/takikawa_encoding.cuh>
 #include <neural-graphics-primitives/testbed.h>
@@ -398,6 +399,14 @@ void Testbed::imgui() {
 		ImGui::Checkbox("Train canonical network", &m_train_canonical);
 		ImGui::SameLine();
 		ImGui::Checkbox("Train delta network(global movement)", &m_train_delta);
+		ImGui::SameLine();
+		ImGui::Checkbox("Train background NeRF", &m_train_bgnerf);
+		
+		ImGui::SameLine();
+		ImGui::Checkbox("Render NeuS2", &m_render_neus);
+		ImGui::SameLine();
+		ImGui::Checkbox("Render background NeRF", &m_render_bgnerf);
+
 		if ((m_testbed_mode == ETestbedMode::Nerf)) {
 			ImGui::Checkbox("Train envmap", &m_nerf.training.train_envmap);
 			ImGui::SameLine();
@@ -874,6 +883,11 @@ void Testbed::imgui() {
 
 			if (imgui_colored_button("Mesh it!", 0.4f)) {
 				marching_cubes(res3d, aabb, m_mesh.thresh);
+				m_nerf.render_with_camera_distortion = false;
+			}
+			if (imgui_colored_button("Mesh Background!", 0.4f)) {
+				res3d = get_marching_cubes_res(m_mesh.res, m_aabb_bg);
+				marching_cubes_bg(res3d, m_aabb_bg, 2.500f);
 				m_nerf.render_with_camera_distortion = false;
 			}
 			if (m_mesh.indices.size()>0) {
@@ -2093,6 +2107,19 @@ void Testbed::reset_network() {
 
 	m_nerf.training.reset_camera_extrinsics();
 
+	// bg_nerf
+	m_bgnerf.training.counters_rgb.rays_per_batch = 1 << 12;
+	m_bgnerf.training.counters_rgb.measured_batch_size_before_compaction = 0;
+	m_bgnerf.training.n_steps_since_cam_update = 0;
+	m_bgnerf.training.n_steps_since_error_map_update = 0;
+	m_bgnerf.training.n_rays_since_error_map_update = 0;
+	m_bgnerf.training.n_steps_between_error_map_updates = 128;
+	m_bgnerf.training.error_map.is_cdf_valid = false;
+	m_bgnerf.training.density_grid_rng = default_rng_t{m_rng.next_uint()};
+
+	m_bgnerf.training.reset_camera_extrinsics();
+
+
 	m_loss_graph_samples = 0;
 
 	// Default config
@@ -2108,6 +2135,7 @@ void Testbed::reset_network() {
 	first_frame_max_training_step = hyperparams_config.value("first_frame_max_training_step", 2000u);
 	next_frame_max_training_step = hyperparams_config.value("next_frame_max_training_step", 1000u);
 	m_training_batch_size = hyperparams_config.value("batch_size", 1<<18);
+	m_training_batch_size_bg = hyperparams_config.value("batch_size_bg", 1<<16);
 	m_incremental_reinit_sdf_mlp = hyperparams_config.value("incremental_reinit_sdf_mlp", false);
 	m_incremental_reinit_sdf_mlp_iters = hyperparams_config.value("incremental_reinit_sdf_mlp_iters", 10);
 	m_reset_density_grid_after_global_movement = hyperparams_config.value("reset_density_grid_after_global_movement", true);
@@ -2115,6 +2143,10 @@ void Testbed::reset_network() {
 	m_finetune_global_movement = hyperparams_config.value("finetune_global_movement", true);
 
 	m_anneal_end = hyperparams_config.value("anneal_end", 0);
+
+	m_use_bgnerf = hyperparams_config.value("use_bgnerf", false);
+	m_render_bgnerf = hyperparams_config.value("render_bgnerf", false);
+	m_render_neus = hyperparams_config.value("render_neus", true);
 
 	m_predict_global_movement = hyperparams_config.value("predict_global_movement", false);
 	m_predict_global_movement_training_step = hyperparams_config.value("predict_global_movement_training_step", 300u);
@@ -2192,6 +2224,7 @@ void Testbed::reset_network() {
 	m_loss.reset(create_loss<precision_t>(loss_config));
 	m_optimizer.reset(create_optimizer<precision_t>(optimizer_config));
 
+
 	size_t n_encoding_params = 0;
 	if (m_testbed_mode == ETestbedMode::Nerf) {
 		m_nerf.training.cam_exposure.resize(m_nerf.training.dataset.n_images, AdamOptimizer<Array3f>(1e-3f, Array3f::Zero()));
@@ -2216,6 +2249,32 @@ void Testbed::reset_network() {
 			network_config,
 			rgb_network_config
 		);
+		if (m_use_bgnerf) {
+			if (!config.contains("bg_network")){
+				// printf("bg_network is not defined in config file!\n");
+				tlog::error() << "bg_network is not defined in config file!";
+				exit(1);
+			}
+
+			json& bg_network_config = config["bg_network"];
+			m_bg_network = m_ngp_network = std::make_shared<NgpNetwork<precision_t>>(
+				dims.n_pos,
+				n_dir_dims,
+				n_extra_dims,
+				dims.n_pos + 1, // The offset of 1 comes from the dt member variable of NerfCoordinate. HACKY
+				bg_network_config["encoding"],
+				bg_network_config["dir_encoding"],
+				bg_network_config["network"],
+				bg_network_config["rgb_network"]
+			);
+
+			m_bg_loss.reset(create_loss<precision_t>(loss_config));
+			json& bg_optimizer_config = config["bg_network"]["optimizer"];
+			m_bg_optimizer.reset(create_optimizer<precision_t>(bg_optimizer_config));
+
+			tlog::info() << "Create BG-Network: " << m_bg_network->n_params() << " parameters";
+		}
+
 
 		m_nerf_network->set_anneal_end(m_anneal_end);
 		
@@ -2301,6 +2360,8 @@ void Testbed::reset_network() {
 	printf("init m_network->n_params():%lu\n", m_network->n_params());
 	// create trainier
 	m_trainer = std::make_shared<Trainer<float, precision_t, precision_t>>(m_network, m_optimizer, m_loss, m_seed);
+	if (m_use_bgnerf)
+		m_bg_trainer = std::make_shared<Trainer<float, precision_t, precision_t>>(m_bg_network, m_bg_optimizer, m_bg_loss, m_seed);
 	m_training_step = 0;
 	m_canonical_training_step = 0;
 	m_training_start_time_point = std::chrono::steady_clock::now();
@@ -2633,6 +2694,8 @@ void Testbed::train(uint32_t batch_size) {
 		return;
 	}
 
+	uint32_t batch_size_bg = m_training_batch_size_bg; // Since it needs gradients in inference step, there may be out of memory if you use full batch_size.
+
 	if (!m_dlss) {
 		// No immediate redraw necessary
 		reset_accumulation(false, false);
@@ -2710,7 +2773,7 @@ void Testbed::train(uint32_t batch_size) {
 		}};
 
 		switch (m_testbed_mode) {
-			case ETestbedMode::Nerf:   train_nerf(batch_size, get_loss_scalar, m_training_stream); break;
+			case ETestbedMode::Nerf:   train_nerf(batch_size, batch_size_bg, get_loss_scalar, m_training_stream); break;
 			case ETestbedMode::Sdf:    train_sdf(batch_size, get_loss_scalar, m_training_stream); break;
 			case ETestbedMode::Image:  train_image(batch_size, get_loss_scalar, m_training_stream); break;
 			case ETestbedMode::Volume: train_volume(batch_size, get_loss_scalar, m_training_stream); break;
