@@ -105,7 +105,7 @@ python scripts/run_per_frame.py --base_dir ${data_dirname} --output_dir ${output
 Dynamic scene examples can be downloaded from [Google Drive](https://drive.google.com/file/d/1hvqaupbufxuadVMP_2reTAqnaEZ4xvhj/view?usp=sharing).
 
 ### Unbounded Scenes (Unmasked scenes)
-** This implementation is still testing **
+**This implementation is still under test**
 
 We add an additional NeRF network to model the background for unbounded scenes or unmasked scenes. You can use the configuration `womask.json` for this mode. 
 
