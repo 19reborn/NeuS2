@@ -68,7 +68,7 @@
 		"first_frame_max_training_step": 20000,
 		"ek_loss_weight": 0.05,
 		"anneal_end": 5000,
-		"use_bgnerf": false,
+		"use_bgnerf": true,
 		"render_bgnerf": false,
 		"render_neus": true,
 		"batch_size": 262144,
