@@ -104,6 +104,10 @@ python scripts/run_per_frame.py --base_dir ${data_dirname} --output_dir ${output
 
 Dynamic scene examples can be downloaded from [Google Drive](https://drive.google.com/file/d/1hvqaupbufxuadVMP_2reTAqnaEZ4xvhj/view?usp=sharing).
 
+### Unbounded Scene
+** This implementation is still testing **
+
+
 ## Data Convention
 
 **NeuS2 supports the data format provided by [Instant-NGP](https://github.com/NVlabs/instant-ngp).** Also, you can use NeuS2's data format (with `from_na=true`).

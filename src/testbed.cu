@@ -402,7 +402,6 @@ void Testbed::imgui() {
 		ImGui::SameLine();
 		ImGui::Checkbox("Train background NeRF", &m_train_bgnerf);
 		
-		ImGui::SameLine();
 		ImGui::Checkbox("Render NeuS2", &m_render_neus);
 		ImGui::SameLine();
 		ImGui::Checkbox("Render background NeRF", &m_render_bgnerf);
@@ -2249,31 +2248,42 @@ void Testbed::reset_network() {
 			network_config,
 			rgb_network_config
 		);
-		if (m_use_bgnerf) {
-			if (!config.contains("bg_network")){
-				// printf("bg_network is not defined in config file!\n");
-				tlog::error() << "bg_network is not defined in config file!";
-				exit(1);
-			}
-
-			json& bg_network_config = config["bg_network"];
-			m_bg_network = m_ngp_network = std::make_shared<NgpNetwork<precision_t>>(
-				dims.n_pos,
-				n_dir_dims,
-				n_extra_dims,
-				dims.n_pos + 1, // The offset of 1 comes from the dt member variable of NerfCoordinate. HACKY
-				bg_network_config["encoding"],
-				bg_network_config["dir_encoding"],
-				bg_network_config["network"],
-				bg_network_config["rgb_network"]
-			);
-
-			m_bg_loss.reset(create_loss<precision_t>(loss_config));
-			json& bg_optimizer_config = config["bg_network"]["optimizer"];
-			m_bg_optimizer.reset(create_optimizer<precision_t>(bg_optimizer_config));
-
-			tlog::info() << "Create BG-Network: " << m_bg_network->n_params() << " parameters";
+		// if (m_use_bgnerf) {
+		json bg_network_config;
+		json bg_optimizer_config;
+		if (!config.contains("bg_network")){
+			bg_network_config = config;
+			// printf("bg_network is not defined in config file!\n");
+			// tlog::error() << "bg_network is not defined in config file!";
+			// exit(1);
 		}
+		else{
+			bg_network_config = config["bg_network"];
+		}
+
+
+		m_bg_network = m_ngp_network = std::make_shared<NgpNetwork<precision_t>>(
+			dims.n_pos,
+			n_dir_dims,
+			n_extra_dims,
+			dims.n_pos + 1, // The offset of 1 comes from the dt member variable of NerfCoordinate. HACKY
+			bg_network_config["encoding"],
+			bg_network_config["dir_encoding"],
+			bg_network_config["network"],
+			bg_network_config["rgb_network"]
+		);
+
+		m_bg_loss.reset(create_loss<precision_t>(loss_config));
+		if (!config.contains("bg_network")){
+			bg_optimizer_config = optimizer_config;
+		}
+		else {
+			bg_optimizer_config = config["bg_network"]["optimizer"];
+		}
+		m_bg_optimizer.reset(create_optimizer<precision_t>(bg_optimizer_config));
+
+		tlog::info() << "Create BG-Network: " << m_bg_network->n_params() << " parameters";
+		// }
 
 
 		m_nerf_network->set_anneal_end(m_anneal_end);
@@ -2360,8 +2370,8 @@ void Testbed::reset_network() {
 	printf("init m_network->n_params():%lu\n", m_network->n_params());
 	// create trainier
 	m_trainer = std::make_shared<Trainer<float, precision_t, precision_t>>(m_network, m_optimizer, m_loss, m_seed);
-	if (m_use_bgnerf)
-		m_bg_trainer = std::make_shared<Trainer<float, precision_t, precision_t>>(m_bg_network, m_bg_optimizer, m_bg_loss, m_seed);
+	// if (m_use_bgnerf)
+	m_bg_trainer = std::make_shared<Trainer<float, precision_t, precision_t>>(m_bg_network, m_bg_optimizer, m_bg_loss, m_seed);
 	m_training_step = 0;
 	m_canonical_training_step = 0;
 	m_training_start_time_point = std::chrono::steady_clock::now();

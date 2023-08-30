@@ -66,10 +66,9 @@
 	"hyperparams": {
 		"linear_color": false,
 		"first_frame_max_training_step": 20000,
-		"mask_loss_weight": 0.0,
 		"ek_loss_weight": 0.05,
 		"anneal_end": 5000,
-		"use_bgnerf": true,
+		"use_bgnerf": false,
 		"render_bgnerf": false,
 		"render_neus": true,
 		"batch_size": 262144,

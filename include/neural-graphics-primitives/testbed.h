@@ -126,6 +126,7 @@ public:
 		void init_rays_from_camera(
 			uint32_t spp,
 			uint32_t padded_output_width,
+			uint32_t padded_output_width_bg,
 			uint32_t n_extra_dims,
 			const Eigen::Vector2i& resolution,
 			const Eigen::Vector2f& focal_length,
@@ -136,6 +137,7 @@ public:
 			Eigen::Vector3f parallax_shift,
 			bool snap_to_pixel_centers,
 			const BoundingBox& render_aabb,
+			const BoundingBox& render_aabb_bg,
 			float plane_z,
 			float dof,
 			const CameraDistortion& camera_distortion,
@@ -146,8 +148,10 @@ public:
 			Eigen::Array4f* frame_buffer,
 			float* depth_buffer,
 			uint8_t *grid,
+			uint8_t *grid_bg,
 			int show_accel,
 			float cone_angle_constant,
+			float cone_angle_constant_bg,
 			ERenderMode render_mode,
 			cudaStream_t stream,
 			const tcnn::network_precision_t* rotation,
@@ -158,13 +162,17 @@ public:
 
 		uint32_t trace(
 			NerfNetwork<precision_t>& network,
+			NgpNetwork<precision_t>& bg_network,
 			const BoundingBox& render_aabb,
 			const BoundingBox& train_aabb,
+			const BoundingBox& train_aabb_bg,
 			const uint32_t n_training_images,
 			const TrainingXForm* training_xforms,
 			const Eigen::Vector2f& focal_length,
 			float cone_angle_constant,
+			float cone_angle_constant_bg,
 			const uint8_t* grid,
+			const uint8_t* grid_bg,
 			ERenderMode render_mode,
 			const Eigen::Matrix<float, 3, 4> &camera_matrix,
 			float depth_scale,
@@ -180,7 +188,8 @@ public:
 			cudaStream_t stream
 		);
 
-		void enlarge(size_t n_elements, uint32_t padded_output_width, uint32_t n_extra_dims, cudaStream_t stream);
+		void enlarge(size_t n_elements, uint32_t padded_output_width, uint32_t padded_output_width_bg, uint32_t n_extra_dims, cudaStream_t stream);
+		// void enlarge(size_t n_elements, uint32_t padded_output_width, uint32_t n_extra_dims, cudaStream_t stream);
 		RaysNerfSoa& rays_hit() { return m_rays_hit; }
 		RaysNerfSoa& rays_init() { return m_rays[0]; }
 		uint32_t n_rays_initialized() const { return m_n_rays_initialized; }
@@ -193,7 +202,9 @@ public:
 		RaysNerfSoa m_rays[2];
 		RaysNerfSoa m_rays_hit;
 		precision_t* m_network_output;
+		precision_t* m_network_output_bg;
 		float* m_network_input;
+		float* m_network_input_bg;
 		tcnn::GPUMemory<uint32_t> m_hit_counter;
 		tcnn::GPUMemory<uint32_t> m_alive_counter;
 		uint32_t m_n_rays_initialized = 0;
@@ -614,7 +625,7 @@ public:
 				float mask_loss_scalar = 0.0f;
 
 				void prepare_for_training_steps(cudaStream_t stream);
-				float update_after_training(uint32_t target_batch_size, uint32_t target_batch_size_bg, bool get_loss_scalar, cudaStream_t stream);
+				float update_after_training(uint32_t target_batch_size, uint32_t target_batch_size_bg, bool get_loss_scalar, bool use_bgnerf, cudaStream_t stream);
 			};
 
 			Counters counters_rgb;
