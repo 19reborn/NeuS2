@@ -269,8 +269,11 @@ def render_img_training_view(args, testbed, log_ptr, image_dir, frame_time_id = 
     minpsnr = 1000
     maxpsnr = 0
 
-    # Evaluate metrics on black background
-    testbed.background_color = [0.0, 0.0, 0.0, 0.0]
+    if args.white_bkgd:
+        testbed.background_color = [1.0, 1.0, 1.0, 1.0]
+    else:
+        # Evaluate metrics on black background
+        testbed.background_color = [0.0, 0.0, 0.0, 0.0]
 
     # Prior nerf papers don't typically do multi-sample anti aliasing.
     # So snap all pixels to the pixel centers.

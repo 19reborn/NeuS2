@@ -327,8 +327,10 @@ if __name__ == "__main__":
 					training_log_ptr.flush()
 					pred_img, gt_img, pred_mesh = render_img_training_view(args, testbed, eval_log_ptr, all_transform_path[testbed.current_training_time_frame], testbed.current_training_time_frame)
 
-					all_pred_img.append(pred_img.astype(np.uint8))
-					all_gt_img.append(gt_img.astype(np.uint8))
+					# all_pred_img.append(pred_img.astype(np.uint8))
+					# all_gt_img.append(gt_img.astype(np.uint8))
+					all_pred_img.append(pred_img)
+					all_gt_img.append(gt_img)
 					if pred_mesh is not None:
 						all_pred_mesh.append(pred_mesh[:,:,[2,1,0]].astype(np.uint8))
 
@@ -346,6 +348,16 @@ if __name__ == "__main__":
 
 			video_path = os.path.join(args.output_path, 'video',f'{args.test_camera_view:04}')
 			os.makedirs(video_path, exist_ok=True)
+			# pred_writer = imageio.get_writer(os.path.join(video_path,'pred_img.gif'), fps=15)
+			# gt_writer = imageio.get_writer(os.path.join(video_path,'gt_img.gif'), fps=15)
+			# if len(all_pred_mesh) > 0:
+				# mesh_writer = imageio.get_writer(os.path.join(video_path,'pred_mesh.gif'), fps=15)
+			# for i in range(len(all_pred_img)):
+				# pred_writer.append_data(all_pred_img[i])
+				# gt_writer.append_data(all_gt_img[i])
+				# if len(all_pred_mesh) > 0:
+					# mesh_writer.append_data(all_pred_mesh[i])
+
 			imageio.mimsave(os.path.join(video_path,'pred_img.gif'),all_pred_img,fps=10)
 			imageio.mimsave(os.path.join(video_path,'gt_img.gif'),all_gt_img,fps=10)
 			if len(all_pred_mesh) > 0:
