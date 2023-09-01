@@ -655,7 +655,12 @@ NerfDataset load_nerf(const std::vector<filesystem::path>& jsonpaths, float shar
 					return (float)json["fl_"s + axis];
 				} else if (json.contains("camera_angle_"s + axis)) {
 					return fov_to_focal_length(resolution, (float)json["camera_angle_"s + axis] * 180 / PI());
-				} else {
+				} else if (frame.contains("fl_"s + axis)) {
+					return (float)frame["fl_"s + axis];
+				} else if (frame.contains("camera_angle_"s + axis)) {
+					return fov_to_focal_length(resolution, (float)frame["camera_angle_"s + axis] * 180 / PI());
+				} 
+				else {
 					return 0.0f;
 				}
 			};
@@ -675,21 +680,21 @@ NerfDataset load_nerf(const std::vector<filesystem::path>& jsonpaths, float shar
 				if (frame.contains("intrinsic_matrix")){
 					const auto& intrinsic = frame["intrinsic_matrix"];
 					result.metadata[i_img].focal_length.x() = float(intrinsic[0][0]);
-					//  result.metadata[i_img].focal_length[0] = float(intrinsic[0][0]);
 					 result.metadata[i_img].focal_length.y() = float(intrinsic[1][1]);
-					//  result.metadata[i_img].focal_length[1] = float(intrinsic[1][1]);
-					 // principal_point = Vector2f{intrinsic[0][2],intrinsic[1][2]};
-					//  principal_point.x() = float(intrinsic[0][2])/(float)json["w"];
 					result.metadata[i_img].principal_point.x() = float(intrinsic[0][2])/(float)json["w"];
 					result.metadata[i_img].principal_point.y() = float(intrinsic[1][2])/(float)json["h"];
-					//  principal_point.x() = float(intrinsic[0][2]);
-					//  principal_point[0] = float(intrinsic[0][2]);
-					//  principal_point.y() = float(intrinsic[1][2])/(float)json["h"];
-					//  principal_point.y() = float(intrinsic[1][2]);
 				}
 				else{
 					throw std::runtime_error{"Couldn't read fov."};
 				}
+			}
+
+			if (frame.contains("cx")) {
+				result.metadata[i_img].principal_point.x() = float(frame["cx"]) / (float)(frame["w"]);
+			}
+
+			if (frame.contains("cy")) {
+				result.metadata[i_img].principal_point.y() = float(frame["cy"]) / (float)(frame["h"]);
 			}
 
 			for (int m = 0; m < 3; ++m) {
