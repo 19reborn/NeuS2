@@ -66,6 +66,7 @@ def parse_args():
 	parser.add_argument('--test', action='store_true')
 	parser.add_argument('--render_img_HW', type=int, default=None)
 	parser.add_argument("--shaded_mesh", action='store_true')
+	parser.add_argument("--white_bkgd", action='store_true')
 
 	args = parser.parse_args()
 	return args
