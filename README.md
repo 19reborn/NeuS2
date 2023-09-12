@@ -108,6 +108,7 @@ Dynamic scene examples can be downloaded from [Google Drive](https://drive.googl
 **This implementation is still under test**
 
 We add an additional NeRF network to model the background for unbounded scenes or unmasked scenes. You can use the configuration `womask.json` for this mode. 
+Note that **you need to change the `aabb_scale`  in the `transform.json` to 1, and adjust the `scale` and `offset` parameters to make your interested object in the aabb.**
 
 ## Data Convention
 
