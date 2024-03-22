@@ -335,8 +335,8 @@ def render_img_training_view(args, testbed, log_ptr, image_dir, frame_time_id = 
     else:
         write_image(join(img_path,f"frame_{frame_time_id:06}",f"frame_{frame_time_id:06}_{training_step}_pred.png"), image)
     
-    diffimg = np.absolute(image - ref_image)
-    diffimg[...,3:4] = 1.0
+    diffimg = np.absolute(image[...,:3] - ref_image[...,:3])
+    # diffimg[...,3:4] = 1.0
 
     if training_step < 0:
         write_image(join(img_path,f"frame_{frame_time_id:06}_diff.png"), diffimg)
